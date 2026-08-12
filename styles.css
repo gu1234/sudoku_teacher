@@ -1,0 +1,623 @@
+/* Sudoku Steps
+ *
+ * Design notes: the player is five and cannot read, so the game speaks in
+ * numerals, colour and motion. Colour carries meaning rather than decoration --
+ * blue is the child's own answer, red is a mistake, orange is "look over here",
+ * teal is every square holding the number they tapped. Nothing on the page may
+ * scroll: the number pad has to be reachable without hunting for it.
+ */
+
+:root {
+  --bg: #f2f5fb;
+  --surface: #ffffff;
+  --ink: #22283a;
+  --ink-soft: #6b7488;
+  --line: #d3daea;
+  --line-strong: #9aa5c0;
+  --accent: #5b7cfa;
+  --given-bg: #eaeefa;
+  --gold: #ffbe0b;
+  --bad: #e5484d;
+  --hint: #f09000;   /* "look over here" -- never red, so red only ever means wrong */
+
+  /* Every number is the same colour. The one distinction the grid still makes
+     is between the numbers the puzzle supplied and the ones the child worked
+     out: those are theirs, and they are worth being able to pick out. */
+  --entry: #1d4ed8;  /* an answer the child put in */
+  --same: #0d9488;   /* every square holding the number they just tapped */
+
+  --accent-2: #7d6bff;         /* the far end of the badge gradient */
+
+  --radius: 14px;
+  --gap: 8px;
+
+  /* One spacing scale, so the rhythm between things is chosen rather than
+     whatever number happened to look right at the time. */
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 18px;
+  --s5: 28px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #12151f;
+    --surface: #1c2130;
+    --ink: #eef1f8;
+    --ink-soft: #98a1b8;
+    --line: #333a4f;
+    --line-strong: #5c6782;
+    --accent: #7f9bff;
+    --given-bg: #262c3d;
+    --gold: #ffcb2e;
+    --bad: #ff6369;
+    --hint: #ffb43d;
+    --accent-2: #9b8cff;
+
+    --entry: #93b4ff;
+    --same: #2dd4bf;
+  }
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  height: 100%;
+  margin: 0;
+  /* Also on <html>: without it, mobile browsers size the fixed overlays
+     against a box bigger than the viewport and the page becomes scrollable. */
+  overflow: hidden;
+}
+
+body {
+  height: 100dvh;              /* 100vh overflows under mobile browser chrome */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;            /* a five-year-old should never have to scroll */
+  background:
+    radial-gradient(115% 55% at 50% 34%,
+      color-mix(in srgb, var(--accent) 9%, var(--bg)) 0%, var(--bg) 72%),
+    var(--bg);
+  color: var(--ink);
+  font-family: ui-rounded, "SF Pro Rounded", "Segoe UI", Nunito, Avenir, system-ui, sans-serif;
+  font-weight: 700;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+  touch-action: manipulation;  /* no double-tap zoom on the grid */
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+
+/* ------------------------------------------------------------------ topbar */
+
+.topbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--gap);
+  padding: max(var(--s2), env(safe-area-inset-top)) var(--s3) var(--s2);
+  background: var(--surface);
+  border-bottom: 2px solid var(--line);
+}
+
+/* Which level, and how far through it -- one cluster, centred, because they
+   answer the same question. */
+.level-cluster {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+}
+
+.icon-btn {
+  flex: none;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius);
+  display: grid;
+  place-items: center;
+  font-size: 22px;
+  background: var(--given-bg);
+  transition: transform .12s ease, background .12s ease;
+}
+.icon-btn:active { transform: scale(.92); }
+
+.menu-glyph {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3px;
+  width: 20px;
+  height: 20px;
+}
+.menu-glyph i {
+  border-radius: 3px;
+  background: var(--accent);
+}
+
+.level-badge {
+  flex: none;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: #fff;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, .12),
+              0 4px 14px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.level-word {
+  font-size: 13px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  opacity: .85;
+}
+.level-number {
+  font-size: 26px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.stars {
+  display: flex;
+  gap: 3px;
+  font-size: clamp(13px, 3.6vw, 17px);
+}
+.star {
+  color: var(--line);
+  transition: color .25s ease, transform .25s ease;
+}
+.star.on {
+  color: var(--gold);
+  text-shadow: 0 0 10px color-mix(in srgb, var(--gold) 55%, transparent);
+  animation: star-earned .5s cubic-bezier(.2, 1.4, .4, 1);
+}
+
+@keyframes star-earned {
+  0%   { transform: scale(.4) rotate(-40deg); }
+  60%  { transform: scale(1.35) rotate(8deg); }
+  100% { transform: scale(1); }
+}
+
+/* ------------------------------------------------------------------- stage */
+
+.stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(var(--s3), 3vh, var(--s5));
+  padding: var(--s3) var(--s3) max(var(--s3), env(safe-area-inset-bottom));
+}
+
+/* The board takes whatever room the header and the pad leave behind, rather
+   than guessing at their height in dvh -- that guess was wrong on a short
+   landscape phone and clipped the bottom row off the grid. */
+.board-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+  display: grid;
+  place-items: center;
+  container-type: size;        /* so the board can measure the space it has */
+}
+
+/* Every rule line is a gap with a backing colour showing through: the board
+   paints the frame and the box seams, each box paints the hairlines between its
+   own cells. One line, one width, everywhere -- no cell draws a border, so no
+   line can come out doubled or lopsided.
+
+   One square size, taken from whichever of the two axes runs out first. Doing
+   the arithmetic explicitly beats leaning on aspect-ratio plus max-width, which
+   let the 6x6 and 9x9 grids grow wider than a phone screen. */
+.board {
+  --cell-max: 92px;
+  --hair: 1px;                 /* between two cells of the same box */
+  --seam: 3px;                 /* between two boxes */
+  --frame: 3px;                /* around the outside */
+
+  --lines-x: calc(
+    (var(--box-cols) - 1) * var(--seam) +
+    var(--box-cols) * (var(--in-cols) - 1) * var(--hair) +
+    2 * var(--frame));
+  --lines-y: calc(
+    (var(--box-rows) - 1) * var(--seam) +
+    var(--box-rows) * (var(--in-rows) - 1) * var(--hair) +
+    2 * var(--frame));
+
+  --cell-fit: min(
+    calc((100cqw - var(--lines-x)) / var(--cols)),
+    calc((100cqh - var(--lines-y)) / var(--rows)),
+    var(--cell-max)
+  );
+  --cell: var(--cell-fit);
+
+  width: calc(var(--cell) * var(--cols) + var(--lines-x));
+  height: calc(var(--cell) * var(--rows) + var(--lines-y));
+  display: grid;
+  grid-template-columns: repeat(var(--box-cols), 1fr);
+  grid-template-rows: repeat(var(--box-rows), 1fr);
+  gap: var(--seam);
+  padding: var(--frame);
+  border-radius: var(--radius);
+  background: var(--line-strong);
+  box-shadow: 0 2px 4px rgba(20, 30, 60, .06),
+              0 10px 28px rgba(20, 30, 60, .13);
+}
+
+/* Whole-pixel cells so every line lands on a device pixel and renders at one
+   crisp width instead of a smeared one and a half. */
+@supports (width: round(down, 3px, 2px)) {
+  .board { --cell: round(down, var(--cell-fit), 1px); }
+}
+
+.box {
+  display: grid;
+  grid-template-columns: repeat(var(--in-cols), 1fr);
+  grid-template-rows: repeat(var(--in-rows), 1fr);
+  gap: var(--hair);
+  background: var(--line);
+  /* A new puzzle arrives one box at a time, diagonally. It is the only moment
+     the game points at its own structure, and it costs nothing to watch.
+     Animating the boxes rather than the cells keeps this clear of the cell
+     animations, which would otherwise inherit the stagger delay. */
+  animation: deal .3s cubic-bezier(.2, .85, .3, 1) both;
+  animation-delay: calc(var(--wave, 0) * 45ms);
+}
+
+@keyframes deal {
+  from { opacity: 0; transform: translateY(6px) scale(.96); }
+  to   { opacity: 1; transform: none; }
+}
+
+.cell {
+  display: grid;
+  place-items: center;
+  background: var(--surface);
+  color: var(--ink);
+  border: none;
+  font-size: calc(var(--cell) * .58);
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  transition: background .15s ease, transform .12s ease, box-shadow .15s ease;
+}
+
+/* The outermost cells follow the board's curve, inset by the frame. */
+.cell.corner-tl { border-top-left-radius: calc(var(--radius) - var(--frame)); }
+.cell.corner-tr { border-top-right-radius: calc(var(--radius) - var(--frame)); }
+.cell.corner-bl { border-bottom-left-radius: calc(var(--radius) - var(--frame)); }
+.cell.corner-br { border-bottom-right-radius: calc(var(--radius) - var(--frame)); }
+
+/* The board reads back to front, quietest to loudest: the numbers the puzzle
+   supplied sit back on a tinted ground, the squares still to fill are clean
+   white paper, and the child's own answers are the brightest thing on it.
+   It used to be the other way round -- their answers were the only white
+   squares, which made their work look like holes in the grid. */
+.cell.given {
+  background: var(--given-bg);
+  color: var(--ink-soft);
+}
+
+.cell.empty {
+  background: var(--surface);
+  box-shadow: inset 0 1px 3px color-mix(in srgb, var(--line-strong) 45%, transparent);
+}
+
+.cell.filled:not(.given) {
+  color: var(--entry);
+  background: color-mix(in srgb, var(--entry) 12%, var(--surface));
+}
+.cell.locked:not(.given) {
+  background: color-mix(in srgb, var(--entry) 18%, var(--surface));
+  box-shadow: inset 0 0 0 3px color-mix(in srgb, var(--entry) 65%, transparent);
+}
+
+/* Every square holding the number that was tapped, so "where are the other
+   threes?" is one tap away. Needs the extra class to outrank .locked:not(.given),
+   which is otherwise more specific and would keep its own colours. */
+.cell.same.same {
+  background: color-mix(in srgb, var(--same) 24%, var(--surface));
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--same) 55%, transparent);
+}
+
+/* Not while it is being rejected: a square that is busy being wrong must look
+   wrong, and the breathing selection ring would otherwise sit on top of it. */
+.cell.selected:not(.bad) {
+  background: color-mix(in srgb, var(--accent) 22%, var(--surface));
+  box-shadow: inset 0 0 0 4px var(--accent);
+  z-index: 2;
+  animation: breathe 1.9s ease-in-out infinite;
+}
+
+/* A slow pulse on the active square -- enough to catch a small child's eye
+   without being the sort of flashing that nobody can look away from. */
+@keyframes breathe {
+  0%, 100% { box-shadow: inset 0 0 0 4px var(--accent); }
+  50%      { box-shadow: inset 0 0 0 4px color-mix(in srgb, var(--accent) 45%, transparent); }
+}
+
+/* The square that was just answered wrongly: the loudest thing on the board.
+   The numeral stays in the ink colour so it reads whatever digit it is -- the
+   red-on-red of a "1" would otherwise vanish. */
+.cell.bad {
+  background: color-mix(in srgb, var(--bad) 26%, var(--surface));
+  color: var(--ink);
+  box-shadow: inset 0 0 0 5px var(--bad);
+  z-index: 4;
+}
+
+/* The squares that already hold the number the child just tried. Marked in the
+   hint colour, never in red: these are not more mistakes, they are the reason
+   for the one mistake. The numeral keeps its own digit colour so it still reads
+   as "that same number is already here", and the pulse carries the eye across. */
+.cell.conflict {
+  background: color-mix(in srgb, var(--hint) 26%, var(--surface));
+  box-shadow: inset 0 0 0 4px var(--hint);
+  z-index: 3;
+  animation: point-out .55s ease-in-out 3;
+}
+
+@keyframes point-out {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.08); }
+}
+
+.cell:not(.locked):hover { background: color-mix(in srgb, var(--accent) 10%, var(--surface)); }
+
+/* ---------------------------------------------------------------- num pad */
+
+.pad {
+  --key: clamp(46px, 14vw, 76px);
+  flex: none;
+  display: grid;
+  place-content: center;
+  grid-template-columns: repeat(var(--pad-cols, 3), var(--key));
+  justify-content: center;
+  gap: var(--gap);
+}
+
+/* Four digits fit in two short rows, so they get to be big and easy to hit --
+   which is exactly where a beginner spends most of their time. */
+.pad[data-digits="4"] { --key: clamp(60px, 21vw, 108px); }
+.pad[data-digits="6"] { --key: clamp(52px, 16vw, 88px); }
+
+.key {
+  width: 100%;
+  height: var(--key);
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: calc(var(--key) * .5);
+  line-height: 1;
+  border: 2px solid var(--line);
+  /* A solid edge rather than a blur: these are buttons to press, and the
+     travel on :active is the whole point. */
+  box-shadow: 0 4px 0 var(--line-strong),
+              inset 0 2px 0 color-mix(in srgb, #fff 60%, transparent);
+  transition: transform .1s ease, box-shadow .1s ease, background .1s ease;
+}
+.key:active {
+  transform: translateY(4px);
+  box-shadow: 0 0 0 var(--line-strong);
+  background: color-mix(in srgb, var(--accent) 18%, var(--surface));
+}
+/* The number currently lit up across the board reads as held down, in the
+   same colour the highlighted squares are wearing. */
+.key.active {
+  background: color-mix(in srgb, var(--same) 24%, var(--surface));
+  border-color: var(--same);
+  transform: translateY(2px);
+  box-shadow: 0 2px 0 var(--line-strong);
+}
+
+.key.erase {
+  grid-column: 1 / -1;         /* a wide bar under the digits, hard to mis-hit */
+  height: calc(var(--key) * .72);
+  color: var(--ink-soft);
+  border-color: var(--line);
+  font-size: calc(var(--key) * .34);
+}
+
+/* Wide and short screens: grid on the left, pad on the right, so a thumb
+   never covers the puzzle. The 500px floor catches a small phone on its side,
+   where stacking would squeeze the grid to nothing. */
+@media (min-aspect-ratio: 1/1) and (min-width: 500px) {
+  .stage {
+    flex-direction: row;
+    align-items: stretch;      /* so the board still has a height to fill */
+    gap: clamp(14px, 4vw, 54px);
+  }
+  .board-wrap { width: auto; }
+  .pad { align-self: center; }
+  .board {
+    --cell-max: 124px;         /* small grids would otherwise look lost here */
+  }
+  .pad { --key: clamp(56px, 7vw, 92px); }
+  .pad[data-digits="4"] { --key: clamp(72px, 10vw, 132px); }
+  .pad[data-digits="6"] { --key: clamp(64px, 8vw, 108px); }
+}
+
+/* --------------------------------------------------------------- rewards */
+
+.confetti {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 40;
+}
+
+.cheer {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  opacity: 0;
+  z-index: 41;
+  font-size: clamp(90px, 34vw, 240px);
+}
+.cheer.show { opacity: 1; }
+/* The emoji is what grows -- scaling the full-screen layer instead would push
+   the page out of shape. */
+.cheer.show > span { animation: cheer-pop 1.5s ease-out; }
+
+@keyframes cheer-pop {
+  0%   { opacity: 0; transform: scale(.3) rotate(-14deg); }
+  22%  { opacity: 1; transform: scale(1.12) rotate(5deg); }
+  40%  { transform: scale(1) rotate(0deg); }
+  75%  { opacity: 1; transform: scale(1.02); }
+  100% { opacity: 0; transform: scale(1.3); }
+}
+
+/* A digit landing in a square. It stays close to full size throughout: the
+   rule lines are gaps now, so a cell that shrinks much opens a hole in the
+   grid behind itself. */
+.pop { animation: pop .34s ease-out; }
+@keyframes pop {
+  0%   { transform: scale(.92); }
+  55%  { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+
+.shake { animation: shake .42s ease-in-out; }
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%      { transform: translateX(-7px) rotate(-3deg); }
+  40%      { transform: translateX(7px) rotate(3deg); }
+  60%      { transform: translateX(-5px) rotate(-2deg); }
+  80%      { transform: translateX(5px) rotate(2deg); }
+}
+
+/* ------------------------------------------------------------------ menu */
+
+.menu {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(10, 15, 30, .55);
+  backdrop-filter: blur(4px);
+}
+.menu[hidden] { display: none; }
+
+.menu-panel {
+  width: min(560px, 100%);
+  max-height: 90dvh;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 18px;
+  border-radius: 22px;
+  background: var(--surface);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, .35);
+}
+
+.menu-title {
+  margin: 0;
+  font-size: 22px;
+  text-align: center;
+}
+
+.level-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;            /* the only scrollable thing in the game */
+  -webkit-overflow-scrolling: touch;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  gap: 10px;
+  padding: 2px;
+}
+
+.tile {
+  display: grid;
+  justify-items: center;
+  gap: 3px;
+  padding: 10px 4px 8px;
+  border-radius: var(--radius);
+  background: var(--given-bg);
+  border: 3px solid transparent;
+  transition: transform .1s ease, border-color .1s ease;
+}
+.tile:active { transform: scale(.94); }
+.tile.current {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 16%, var(--surface));
+}
+/* Once a level is beaten it stays gold, even after the stars start over. */
+.tile.mastered {
+  background: color-mix(in srgb, var(--gold) 18%, var(--surface));
+}
+.tile.mastered.current { border-color: var(--accent); }
+
+.tile-num { font-size: 24px; line-height: 1; }
+.tile-shape { font-size: 12px; color: var(--ink-soft); }
+
+.tile-stars { display: flex; gap: 3px; }
+.tile-stars i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--line);
+}
+.tile-stars i.on { background: var(--gold); }
+
+.close-btn {
+  flex: none;
+  padding: 14px;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: #fff;
+  font-size: 19px;
+}
+.close-btn:active { transform: scale(.97); }
+
+/* Deliberately quiet and last in the panel -- it is a grown-up's button. */
+.reset-btn {
+  flex: none;
+  align-self: center;
+  padding: 10px 16px;
+  border-radius: var(--radius);
+  color: var(--ink-soft);
+  font-size: 14px;
+  transition: background .15s ease, color .15s ease;
+}
+.reset-btn:hover { background: var(--given-bg); }
+.reset-btn.armed {
+  background: color-mix(in srgb, var(--bad) 16%, var(--surface));
+  color: var(--bad);
+}
+
+/* --------------------------------------------------------------- a11y */
+
+:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}

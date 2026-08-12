@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="theme-color" content="#5b7cfa">
+<meta name="description" content="A gentle sudoku game that teaches a young child to play, one small step at a time.">
+<title>Sudoku Steps</title>
+<link rel="stylesheet" href="./styles.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔢</text></svg>">
+</head>
+<body>
+
+<header class="topbar">
+  <button id="menu-btn" class="icon-btn" aria-label="Choose a level" aria-haspopup="dialog">
+    <span class="menu-glyph" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+  </button>
+
+  <div class="level-cluster">
+    <div class="level-badge" aria-live="polite">
+      <span class="level-word">Level</span>
+      <span class="level-number" id="level-number">1</span>
+    </div>
+    <div class="stars" id="stars" role="img" aria-label="Progress on this level"></div>
+  </div>
+
+  <button id="mute-btn" class="icon-btn" aria-label="Turn sound off" aria-pressed="false">
+    <span class="mute-glyph" aria-hidden="true">🔊</span>
+  </button>
+</header>
+
+<main class="stage">
+  <div class="board-wrap">
+    <div id="board" class="board" role="grid" aria-label="Puzzle"></div>
+  </div>
+
+  <div id="pad" class="pad" role="group" aria-label="Numbers"></div>
+</main>
+
+<canvas id="confetti" class="confetti" aria-hidden="true"></canvas>
+
+<div id="cheer" class="cheer" aria-hidden="true"><span id="cheer-face">🎉</span></div>
+
+<div id="menu" class="menu" role="dialog" aria-modal="true" aria-label="Choose a level" hidden>
+  <div class="menu-panel">
+    <h1 class="menu-title">Pick a level</h1>
+    <div id="level-list" class="level-list"></div>
+    <button id="menu-close" class="close-btn">Play</button>
+    <button id="reset-btn" class="reset-btn">Start over</button>
+  </div>
+</div>
+
+<script src="./js/levels.js"></script>
+<script src="./js/generator.js"></script>
+<script src="./js/audio.js"></script>
+<script src="./js/game.js"></script>
+</body>
+</html>
