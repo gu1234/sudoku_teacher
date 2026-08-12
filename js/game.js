@@ -28,6 +28,7 @@ const state = {
   mistakes: 0,              // mistakes in the current attempt
   selected: -1,
   activeDigit: 0,           // the number last tapped, highlighted across the board
+  theme: 'sky',             // which look is on
   busy: false,              // true while a celebration is playing
   // Bumped on every new puzzle. The delayed callbacks below capture it and
   // bail if it has moved on, so a level picked from the menu mid-animation
@@ -46,6 +47,7 @@ const el = {
   levelList: document.getElementById('level-list'),
   muteBtn: document.getElementById('mute-btn'),
   resetBtn: document.getElementById('reset-btn'),
+  themes: document.getElementById('themes'),
   confetti: document.getElementById('confetti'),
   cheer: document.getElementById('cheer'),
   cheerFace: document.getElementById('cheer-face'),
@@ -65,6 +67,7 @@ function save() {
       streaks: state.streaks,
       mastered: state.mastered,
       muted: state.muted,
+      theme: state.theme,
     }));
   } catch (e) { /* private browsing, nothing we can do */ }
 }
@@ -78,9 +81,28 @@ function load() {
   state.streaks = saved.streaks || {};
   state.mastered = saved.mastered || {};
   state.muted = !!saved.muted;
+  if (THEMES.indexOf(saved.theme) !== -1) state.theme = saved.theme;
 }
 
 function streakOf(levelId) { return state.streaks[levelId] || 0; }
+
+/* ------------------------------------------------------------------ looks */
+
+const THEMES = ['sky', 'crayon', 'chalk'];
+
+/* A theme is nothing but a set of custom properties hung off the root element,
+ * so switching one is a single attribute write and no re-render. */
+function setTheme(name) {
+  state.theme = THEMES.indexOf(name) !== -1 ? name : 'sky';
+  document.documentElement.dataset.theme = state.theme;
+
+  const picks = el.themes.querySelectorAll('.theme-pick');
+  for (let i = 0; i < picks.length; i++) {
+    picks[i].setAttribute('aria-pressed',
+      String(picks[i].dataset.themeName === state.theme));
+  }
+  save();
+}
 
 /* ------------------------------------------------------------------ setup */
 
@@ -708,6 +730,13 @@ el.pad.addEventListener('click', function (e) {
 el.menuBtn.addEventListener('click', openMenu);
 el.menuClose.addEventListener('click', closeMenu);
 
+el.themes.addEventListener('click', function (e) {
+  const pick = e.target.closest('.theme-pick');
+  if (!pick) return;
+  setTheme(pick.dataset.themeName);
+  Sound.select();
+});
+
 el.resetBtn.addEventListener('click', function () {
   if (resetArmed) {
     Sound.select();
@@ -780,6 +809,7 @@ window.addEventListener('resize', function () {
 /* ------------------------------------------------------------------- start */
 
 load();
+setTheme(state.theme);
 setMuted(state.muted);
 newAttempt();          // always a clean puzzle, on the level they got to
 render();

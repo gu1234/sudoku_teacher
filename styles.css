@@ -28,7 +28,24 @@
 
   --accent-2: #7d6bff;         /* the far end of the badge gradient */
 
+  /* The character of a look, not just its colours: how round things are, what
+     the numerals are set in, how the board and the keys sit off the page, and
+     how heavy the rules between squares are. A theme sets these. */
+  --font: ui-rounded, "SF Pro Rounded", "Segoe UI", Nunito, Avenir, system-ui, sans-serif;
   --radius: 14px;
+  --hair: 1px;                 /* between two squares of the same box */
+  --seam: 3px;                 /* between two boxes */
+  --frame: 3px;                /* around the outside */
+  --page-bg:
+    radial-gradient(115% 55% at 50% 34%,
+      color-mix(in srgb, var(--accent) 9%, var(--bg)) 0%, var(--bg) 72%),
+    var(--bg);
+  --board-shadow: 0 2px 4px rgba(20, 30, 60, .06), 0 10px 28px rgba(20, 30, 60, .13);
+  --panel-shadow: 0 20px 50px rgba(0, 0, 0, .35);
+  --badge-bg: linear-gradient(135deg, var(--accent), var(--accent-2));
+  --key-lift: 4px;
+  --key-gloss: inset 0 2px 0 color-mix(in srgb, #fff 60%, transparent);
+
   --gap: 8px;
 
   /* One spacing scale, so the rhythm between things is chosen rather than
@@ -60,6 +77,144 @@
   }
 }
 
+/* ---------------------------------------------------------------- themes --
+   Three looks, picked from the menu and remembered. Each is a complete set of
+   tokens, so a theme changes the shape and weight of the game as well as its
+   colours -- nothing below this block knows which one is on.
+
+   The selectors carry [data-theme], so they outrank the defaults above on
+   specificity and the order of the dark-mode blocks cannot trip them up. */
+
+/* --- Crayon: warm paper, thick rules, a hand-drawn face. The picture-book
+       reading of the game, and the one aimed squarely at the player. ------- */
+:root[data-theme="crayon"] {
+  --bg: #ffefdc;
+  --surface: #fffdf8;
+  --ink: #4a3728;
+  --ink-soft: #8a6a4e;
+  --line: #f2ddbe;
+  --line-strong: #e0a94a;      /* the rules are drawn in warm gold, not grey */
+  --accent: #ff6b35;
+  --accent-2: #ff9f1c;
+  --given-bg: #fdf0dc;
+  --gold: #ffb703;
+  --bad: #d93025;
+  --hint: #b8860b;
+  --entry: #0b7a75;
+  --same: #7048c4;
+
+  --font: "Chalkboard SE", "Comic Sans MS", ui-rounded, "SF Pro Rounded", system-ui, sans-serif;
+  --radius: 22px;
+  --hair: 2px;
+  --seam: 5px;
+  --frame: 5px;
+  --page-bg: radial-gradient(120% 60% at 50% 28%, #fff8ec 0%, #ffefdc 72%), #ffefdc;
+  --board-shadow: 0 6px 0 #e8c99a, 0 14px 30px rgba(120, 80, 30, .18);
+  --panel-shadow: 0 20px 50px rgba(90, 60, 20, .38);
+  --key-lift: 6px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="crayon"] {
+    --bg: #2b1f16;
+    --surface: #3a2b20;
+    --ink: #ffeedd;
+    --ink-soft: #c4a184;
+    --line: #4d3a2b;
+    --line-strong: #b8863c;
+    --accent: #ff8352;
+    --accent-2: #ffb347;
+    --given-bg: #33251b;
+    --gold: #ffc93c;
+    --bad: #ff7a70;
+    --hint: #ffc266;
+    --entry: #57d6cd;
+    --same: #b79bff;
+    --page-bg: radial-gradient(120% 60% at 50% 28%, #372820 0%, #2b1f16 72%), #2b1f16;
+    --board-shadow: 0 6px 0 #1d140e, 0 14px 30px rgba(0, 0, 0, .45);
+  }
+}
+
+/* --- Chalk: a classroom board. Commits to being dark in either scheme,
+       because a chalkboard is a chalkboard at any time of day. ------------- */
+:root[data-theme="chalk"] {
+  --bg: #1c2620;
+  --surface: #2e3d35;
+  --ink: #f4f1e6;
+  --ink-soft: #a9bdb0;
+  --line: #3b4c42;
+  --line-strong: #6d8478;
+  --accent: #7fd1ae;
+  --accent-2: #a8e6cf;
+  --given-bg: #1f2b25;
+  --gold: #ffd43b;
+  --bad: #ff8787;
+  --hint: #ffb066;
+  --entry: #ffd166;            /* the child writes in yellow chalk */
+  --same: #74c0fc;
+
+  --radius: 6px;
+  --hair: 1px;
+  --seam: 2px;
+  --frame: 2px;
+  --page-bg: radial-gradient(125% 65% at 50% 22%, #2b3a32 0%, #18211c 78%), #18211c;
+  --board-shadow: 0 0 0 3px #3f322a, 0 12px 26px rgba(0, 0, 0, .5);
+  --panel-shadow: 0 20px 50px rgba(0, 0, 0, .6);
+  --badge-bg: linear-gradient(135deg, var(--accent), var(--accent-2));
+  --key-lift: 2px;
+  --key-gloss: none;
+}
+
+/* The chalk badge carries dark text: its accent is a pale mint. */
+:root[data-theme="chalk"] .level-badge,
+:root[data-theme="chalk"] /* Choosing the look. Names are for the grown-up; the swatch is what a child
+   would go by, so each one shows the theme's own paper, rule and answer
+   colours rather than a word. */
+.themes {
+  flex: none;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--s2);
+}
+
+.theme-pick {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: var(--s2) var(--s1);
+  border-radius: var(--radius);
+  border: 3px solid transparent;
+  background: var(--given-bg);
+  font-size: 13px;
+  color: var(--ink-soft);
+  transition: border-color .12s ease, transform .1s ease;
+}
+.theme-pick:active { transform: scale(.95); }
+.theme-pick[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--ink);
+}
+
+.theme-chip {
+  width: 100%;
+  height: 34px;
+  border-radius: 9px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  overflow: hidden;
+  border: 2px solid var(--paper, #ccc);
+}
+.theme-chip i { display: block; }
+.theme-chip i:nth-child(1) { background: var(--paper); }
+.theme-chip i:nth-child(2) { background: var(--rule); }
+.theme-chip i:nth-child(3) { background: var(--pen); }
+
+.theme-pick[data-theme-name="sky"]    { --paper: #ffffff; --rule: #9aa5c0; --pen: #1d4ed8; }
+.theme-pick[data-theme-name="crayon"] { --paper: #fffdf8; --rule: #e0a94a; --pen: #0b7a75; }
+.theme-pick[data-theme-name="chalk"]  { --paper: #26332c; --rule: #6d8478; --pen: #ffd166; }
+
+.close-btn { color: #14201a; }
+
 * { box-sizing: border-box; }
 
 html, body {
@@ -75,12 +230,9 @@ body {
   display: flex;
   flex-direction: column;
   overflow: hidden;            /* a five-year-old should never have to scroll */
-  background:
-    radial-gradient(115% 55% at 50% 34%,
-      color-mix(in srgb, var(--accent) 9%, var(--bg)) 0%, var(--bg) 72%),
-    var(--bg);
+  background: var(--page-bg);
   color: var(--ink);
-  font-family: ui-rounded, "SF Pro Rounded", "Segoe UI", Nunito, Avenir, system-ui, sans-serif;
+  font-family: var(--font);
   font-weight: 700;
   -webkit-tap-highlight-color: transparent;
   -webkit-text-size-adjust: 100%;
@@ -150,7 +302,7 @@ button {
   gap: 6px;
   padding: 6px 14px;
   border-radius: 999px;
-  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  background: var(--badge-bg);
   color: #fff;
   box-shadow: 0 2px 0 rgba(0, 0, 0, .12),
               0 4px 14px color-mix(in srgb, var(--accent) 45%, transparent);
@@ -224,9 +376,6 @@ button {
    let the 6x6 and 9x9 grids grow wider than a phone screen. */
 .board {
   --cell-max: 92px;
-  --hair: 1px;                 /* between two cells of the same box */
-  --seam: 3px;                 /* between two boxes */
-  --frame: 3px;                /* around the outside */
 
   --lines-x: calc(
     (var(--box-cols) - 1) * var(--seam) +
@@ -253,8 +402,7 @@ button {
   padding: var(--frame);
   border-radius: var(--radius);
   background: var(--line-strong);
-  box-shadow: 0 2px 4px rgba(20, 30, 60, .06),
-              0 10px 28px rgba(20, 30, 60, .13);
+  box-shadow: var(--board-shadow);
 }
 
 /* Whole-pixel cells so every line lands on a device pixel and renders at one
@@ -407,12 +555,11 @@ button {
   border: 2px solid var(--line);
   /* A solid edge rather than a blur: these are buttons to press, and the
      travel on :active is the whole point. */
-  box-shadow: 0 4px 0 var(--line-strong),
-              inset 0 2px 0 color-mix(in srgb, #fff 60%, transparent);
+  box-shadow: 0 var(--key-lift) 0 var(--line-strong), var(--key-gloss);
   transition: transform .1s ease, box-shadow .1s ease, background .1s ease;
 }
 .key:active {
-  transform: translateY(4px);
+  transform: translateY(var(--key-lift));
   box-shadow: 0 0 0 var(--line-strong);
   background: color-mix(in srgb, var(--accent) 18%, var(--surface));
 }
@@ -528,7 +675,7 @@ button {
   padding: 18px;
   border-radius: 22px;
   background: var(--surface);
-  box-shadow: 0 20px 50px rgba(0, 0, 0, .35);
+  box-shadow: var(--panel-shadow);
 }
 
 .menu-title {
@@ -580,6 +727,52 @@ button {
   background: var(--line);
 }
 .tile-stars i.on { background: var(--gold); }
+
+/* Choosing the look. Names are for the grown-up; the swatch is what a child
+   would go by, so each one shows the theme's own paper, rule and answer
+   colours rather than a word. */
+.themes {
+  flex: none;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--s2);
+}
+
+.theme-pick {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: var(--s2) var(--s1);
+  border-radius: var(--radius);
+  border: 3px solid transparent;
+  background: var(--given-bg);
+  font-size: 13px;
+  color: var(--ink-soft);
+  transition: border-color .12s ease, transform .1s ease;
+}
+.theme-pick:active { transform: scale(.95); }
+.theme-pick[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--ink);
+}
+
+.theme-chip {
+  width: 100%;
+  height: 34px;
+  border-radius: 9px;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  overflow: hidden;
+  border: 2px solid var(--paper, #ccc);
+}
+.theme-chip i { display: block; }
+.theme-chip i:nth-child(1) { background: var(--paper); }
+.theme-chip i:nth-child(2) { background: var(--rule); }
+.theme-chip i:nth-child(3) { background: var(--pen); }
+
+.theme-pick[data-theme-name="sky"]    { --paper: #ffffff; --rule: #9aa5c0; --pen: #1d4ed8; }
+.theme-pick[data-theme-name="crayon"] { --paper: #fffdf8; --rule: #e0a94a; --pen: #0b7a75; }
+.theme-pick[data-theme-name="chalk"]  { --paper: #26332c; --rule: #6d8478; --pen: #ffd166; }
 
 .close-btn {
   flex: none;

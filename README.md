@@ -32,6 +32,11 @@ the number they just tapped.
 - The **level number is always in the header**, and the menu button opens a grid
   of all 20 levels so you can jump anywhere at any time. Levels already beaten
   stay gold in the menu even after their stars start over for a replay.
+- **Three looks** to choose from in the menu, and the choice is remembered:
+  **Sky** (soft and app-like), **Crayon** (warm paper, gold rules, a hand-drawn
+  face) and **Chalk** (a classroom board, the child writing in yellow chalk).
+  A theme is a complete set of custom properties, so it changes the roundness,
+  the typeface and the weight of the rules as well as the colours.
 - **Start over** at the bottom of the menu clears every star. It takes two taps,
   because a five-year-old is holding the device.
 - The level reached, the stars and the sound setting are kept in `localStorage`.
@@ -113,7 +118,7 @@ of all of them, which is kinder for a young child who is tiring.
 | `js/levels.js` | The level table and the mastery constants — the tuning knob |
 | `js/generator.js` | Grid generation, the human-technique solver, and blank carving |
 | `js/audio.js` | Oscillator sound effects and the iOS audio unlock |
-| `js/game.js` | State, rendering, input, streaks, confetti |
+| `js/game.js` | State, rendering, input, streaks, confetti, themes |
 
 A number is never taken away unless the puzzle can still be reasoned out with the
 level's own technique, which also guarantees exactly one solution — a child who
