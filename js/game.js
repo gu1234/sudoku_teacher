@@ -398,10 +398,20 @@ function place(digit) {
       }
 
       // Show it for a moment, then take it back so the child can retry.
+      //
+      // Input stays live during that moment, on purpose -- a child who spots
+      // the mistake should be able to fix it at once rather than wait. So by
+      // the time this runs the square may already hold the right answer, and
+      // it must only ever take back the digit it was actually scheduled for.
+      // Clearing blindly wiped a correct answer typed quickly after a wrong
+      // one, and left the square locked and empty: impossible to fill again.
       const at = i;
+      const rejected = digit;
       const token = state.token;
       setTimeout(function () {
-        if (state.token !== token) return;   // moved on to another puzzle
+        if (state.token !== token) return;         // moved on to another puzzle
+        if (state.locked[at]) return;              // answered correctly since
+        if (state.entries[at] !== rejected) return; // changed since
         state.entries[at] = 0;
         clearMarks();
         repaint();
