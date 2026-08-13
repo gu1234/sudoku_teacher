@@ -7,6 +7,9 @@
  *
  * (If a phone is silent, check the hardware mute switch: iOS honours it for
  * WebAudio, so that is not necessarily a bug.)
+ *
+ * Safari needs more care than Chrome here: it has an extra context state and
+ * drops out of 'running' on its own. See unlock().
  */
 
 const Sound = (function () {
@@ -18,8 +21,28 @@ const Sound = (function () {
       const AC = window.AudioContext || window.webkitAudioContext;
       if (!AC) return;
       ctx = new AC();
+
+      // WebKit stays mute until something has actually been played through the
+      // context inside a gesture. Play a single silent sample to satisfy it.
+      try {
+        const src = ctx.createBufferSource();
+        src.buffer = ctx.createBuffer(1, 1, 22050);
+        src.connect(ctx.destination);
+        src.start(0);
+      } catch (e) { /* not fatal: the notes below may still sound */ }
     }
-    if (ctx.state === 'suspended') ctx.resume();
+
+    // Anything that is not running, rather than only 'suspended'. Safari has a
+    // third state Chrome does not -- 'interrupted' -- which it parks a context
+    // in after a phone call, a route change, or a spell in the background. A
+    // context sitting in 'interrupted' was never resumed here, so sound would
+    // stop for good in Safari while Chrome carried on none the wiser.
+    if (ctx.state !== 'running' && ctx.resume) {
+      const resuming = ctx.resume();
+      // Outside a gesture Safari rejects this; that is fine, the next tap
+      // will try again. An unhandled rejection would show up in the console.
+      if (resuming && resuming.catch) resuming.catch(function () {});
+    }
   }
 
   function setMuted(value) { muted = !!value; }
@@ -28,7 +51,14 @@ const Sound = (function () {
   /* One note. `type` shapes the timbre, `t` is an offset in seconds. */
   function note(freq, start, duration, gain, type) {
     if (!ctx || muted) return;
-    const t = ctx.currentTime + start;
+
+    // A context that has drifted out of 'running' has a frozen clock, so
+    // anything scheduled against it would land in the past once it restarts
+    // and simply never be heard. Nudge it awake and give every note a moment
+    // of lead time so it is always scheduled slightly ahead of now.
+    if (ctx.state !== 'running') unlock();
+
+    const t = ctx.currentTime + 0.005 + start;
     const osc = ctx.createOscillator();
     const env = ctx.createGain();
 

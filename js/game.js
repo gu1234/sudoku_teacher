@@ -695,13 +695,21 @@ function setMuted(muted) {
 
 /* ------------------------------------------------------------------ wiring */
 
-// iOS will not play a sound from a context created at load time, so the very
-// first touch or click anywhere is what brings the audio to life.
+// iOS will not play a sound from a context created at load time, so the first
+// touch or click anywhere is what brings the audio to life.
+//
+// These listeners stay put rather than firing once. Safari can drop the audio
+// context back out of 'running' at any point -- after a call, a route change,
+// or time spent in another tab -- and only a gesture may wake it again, so
+// every gesture has to be allowed another go. unlock() returns immediately
+// when the context is already running, so the cost of this is nothing.
 ['pointerdown', 'keydown'].forEach(function (evt) {
-  window.addEventListener(evt, function once() {
-    Sound.unlock();
-    window.removeEventListener(evt, once);
-  }, { once: true });
+  window.addEventListener(evt, function () { Sound.unlock(); }, true);
+});
+
+// Coming back to the tab is the other moment Safari needs waking up.
+document.addEventListener('visibilitychange', function () {
+  if (!document.hidden) Sound.unlock();
 });
 
 el.board.addEventListener('click', function (e) {

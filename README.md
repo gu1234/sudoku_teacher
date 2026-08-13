@@ -117,7 +117,7 @@ of all of them, which is kinder for a young child who is tiring.
 | --- | --- |
 | `js/levels.js` | The level table and the mastery constants — the tuning knob |
 | `js/generator.js` | Grid generation, the human-technique solver, and blank carving |
-| `js/audio.js` | Oscillator sound effects and the iOS audio unlock |
+| `js/audio.js` | Oscillator sound effects, and keeping Safari's audio awake |
 | `js/game.js` | State, rendering, input, streaks, confetti, themes |
 
 A number is never taken away unless the puzzle can still be reasoned out with the
