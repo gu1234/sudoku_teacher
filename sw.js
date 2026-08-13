@@ -6,7 +6,7 @@
  * can never outlive a release. Without that bump a service worker will happily
  * serve last week's game for ever.
  */
-const CACHE = 'sudoku-steps-v4';
+const CACHE = 'sudoku-steps-v5';
 
 const SHELL = [
   './',
@@ -24,7 +24,17 @@ const SHELL = [
 self.addEventListener('install', function (e) {
   e.waitUntil(
     caches.open(CACHE)
-      .then(function (c) { return c.addAll(SHELL); })
+      .then(function (c) {
+        // cache: 'reload' goes past the browser's own HTTP cache. Without it a
+        // brand new cache can be filled with the bytes of the release before
+        // it -- the browser serves its stale copy quite happily, and nothing
+        // ever re-fetches afterwards, so the app pins itself to the old
+        // version for good. Pages sends max-age=600, so the window for that is
+        // ten minutes after every deploy.
+        return c.addAll(SHELL.map(function (u) {
+          return new Request(u, { cache: 'reload' });
+        }));
+      })
       .then(function () { return self.skipWaiting(); })
   );
 });
@@ -43,34 +53,25 @@ self.addEventListener('activate', function (e) {
 
 self.addEventListener('fetch', function (e) {
   if (e.request.method !== 'GET') return;
+  if (new URL(e.request.url).origin !== self.location.origin) return;
 
-  // Navigations go to the network first, so a new deploy is picked up as soon
-  // as there is a connection, and fall back to the cached page when there is
-  // not. Everything else is served from the cache and refreshed behind the
-  // scenes -- it is all small, and instant beats current for a game.
-  if (e.request.mode === 'navigate') {
-    e.respondWith(
-      fetch(e.request)
-        .then(function (res) {
-          const copy = res.clone();
-          caches.open(CACHE).then(function (c) { c.put('./index.html', copy); });
-          return res;
-        })
-        .catch(function () { return caches.match('./index.html'); })
-    );
-    return;
-  }
+  // One release is served whole, or not at all. Fetching the page from the
+  // network while the scripts still come from the cache would mix a new page
+  // with the previous release's code -- which is how a service worker breaks
+  // an app outright, rather than merely leaving it a version behind. A new
+  // release arrives when the new worker installs, and then all of it does.
+  const key = e.request.mode === 'navigate' ? './index.html' : e.request;
 
   e.respondWith(
-    caches.match(e.request).then(function (hit) {
-      const fresh = fetch(e.request).then(function (res) {
+    caches.match(key).then(function (hit) {
+      if (hit) return hit;
+      return fetch(e.request).then(function (res) {
         if (res && res.status === 200 && res.type === 'basic') {
           const copy = res.clone();
-          caches.open(CACHE).then(function (c) { c.put(e.request, copy); });
+          caches.open(CACHE).then(function (c) { c.put(key, copy); });
         }
         return res;
-      }).catch(function () { return hit; });
-      return hit || fresh;
+      });
     })
   );
 });
