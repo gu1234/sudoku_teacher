@@ -18,10 +18,6 @@ const VERDICT_PAUSE_WITH_HINT = 2400;
 // How long a hint stays on the board before it fades.
 const HINT_LINGER = 6000;
 
-// Said aloud as a number goes in, so a child who cannot read yet hears the
-// name of the numeral they just chose.
-const NUMBER_WORDS = ['', 'one', 'two', 'three', 'four', 'five',
-                      'six', 'seven', 'eight', 'nine'];
 
 
 const state = {
@@ -37,7 +33,6 @@ const state = {
   selected: -1,
   activeDigit: 0,           // the number last tapped, highlighted across the board
   theme: 'sky',             // which look is on
-  speak: true,              // say each number out loud as it goes in
   stats: {},                // levelId -> { attempts, perfect, mistakes }
   busy: false,              // true while a celebration is playing
   // Bumped on every new puzzle. The delayed callbacks below capture it and
@@ -58,7 +53,6 @@ const el = {
   muteBtn: document.getElementById('mute-btn'),
   resetBtn: document.getElementById('reset-btn'),
   themes: document.getElementById('themes'),
-  speakBtn: document.getElementById('speak-btn'),
   statsBtn: document.getElementById('stats-btn'),
   stats: document.getElementById('stats'),
   statsBody: document.getElementById('stats-body'),
@@ -83,7 +77,6 @@ function save() {
       mastered: state.mastered,
       muted: state.muted,
       theme: state.theme,
-      speak: state.speak,
       stats: state.stats,
     }));
   } catch (e) { /* private browsing, nothing we can do */ }
@@ -99,29 +92,10 @@ function load() {
   state.mastered = saved.mastered || {};
   state.muted = !!saved.muted;
   if (THEMES.indexOf(saved.theme) !== -1) state.theme = saved.theme;
-  if (typeof saved.speak === 'boolean') state.speak = saved.speak;
   state.stats = saved.stats || {};
 }
 
 function streakOf(levelId) { return state.streaks[levelId] || 0; }
-
-/* ----------------------------------------------------------------- speech */
-
-/* The browser's own voice, so there is nothing to host and nothing to load.
- * Naming the numeral as it goes in is the one bit of reading practice the game
- * can offer a child who cannot read yet. */
-function say(word) {
-  if (!state.speak || state.muted || !word) return;
-  if (typeof speechSynthesis === 'undefined') return;
-  try {
-    speechSynthesis.cancel();            // never let them queue up and lag behind
-    const u = new SpeechSynthesisUtterance(word);
-    u.lang = 'en-US';
-    u.rate = 0.9;
-    u.pitch = 1.15;
-    speechSynthesis.speak(u);
-  } catch (e) { /* no voice available; the tones still play */ }
-}
 
 /* ------------------------------------------------------------------ looks */
 
@@ -402,7 +376,6 @@ function place(digit) {
       state.entries[i] = digit;
       state.locked[i] = true;
       Sound.correct();
-      say(NUMBER_WORDS[digit]);
       state.selected = -1;                 // they pick the next square themselves
       repaint();
       flash(i, 'pop');
@@ -442,7 +415,6 @@ function place(digit) {
   } else {
     state.entries[i] = digit;
     Sound.place();
-    say(NUMBER_WORDS[digit]);
     state.selected = -1;                   // they pick the next square themselves
     repaint();
     flash(i, 'pop');
@@ -882,15 +854,6 @@ function renderStats() {
   el.statsBody.appendChild(table);
 }
 
-function setSpeak(on) {
-  state.speak = !!on;
-  el.speakBtn.setAttribute('aria-pressed', String(state.speak));
-  if (!state.speak && typeof speechSynthesis !== 'undefined') {
-    try { speechSynthesis.cancel(); } catch (e) { /* nothing to stop */ }
-  }
-  save();
-}
-
 function setMuted(muted) {
   state.muted = muted;
   Sound.setMuted(muted);
@@ -952,12 +915,6 @@ el.themes.addEventListener('click', function (e) {
   if (!pick) return;
   setTheme(pick.dataset.themeName);
   Sound.select();
-});
-
-el.speakBtn.addEventListener('click', function () {
-  setSpeak(!state.speak);
-  Sound.select();
-  if (state.speak) say('three');           // a sample, so the change is audible
 });
 
 el.statsBtn.addEventListener('click', function () {
@@ -1063,7 +1020,6 @@ if ('serviceWorker' in navigator && location.protocol !== 'file:') {
 
 load();
 setTheme(state.theme);
-setSpeak(state.speak);
 setMuted(state.muted);
 newAttempt();          // always a clean puzzle, on the level they got to
 render();

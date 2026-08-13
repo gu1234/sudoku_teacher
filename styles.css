@@ -808,15 +808,8 @@ button {
 /* On levels with no eraser there is nothing to share the row with. */
 .key.hint-key.wide { grid-column: 1 / -1; }
 
-/* Two small controls side by side under the level list. */
-.menu-row {
-  flex: none;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--s2);
-}
-
 .toggle-btn {
+  flex: none;
   padding: 11px var(--s2);
   border-radius: var(--radius);
   background: var(--given-bg);

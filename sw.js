@@ -6,7 +6,7 @@
  * can never outlive a release. Without that bump a service worker will happily
  * serve last week's game for ever.
  */
-const CACHE = 'sudoku-steps-v3';
+const CACHE = 'sudoku-steps-v4';
 
 const SHELL = [
   './',

@@ -34,9 +34,6 @@ the number they just tapped.
   answer in. The reasoning runs only over given numbers and confirmed answers,
   so a hint is never built on an unchecked guess, and it steps around squares
   already holding one rather than quietly revealing they are wrong.
-- **The numbers are spoken aloud** as they go in, using the browser's own voice —
-  the one bit of reading practice the game can offer a pre-reader. Turn it off
-  in the menu.
 - **Every completed level gets confetti** and a tune; mastering one earns a
   **sticker** — twenty of them, one per level, kept in the menu — plus a fanfare,
   then moves on automatically.
