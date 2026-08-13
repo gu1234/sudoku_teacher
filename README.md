@@ -25,10 +25,24 @@ the number they just tapped.
   the squares that already hold that number** in the same line or box, in orange,
   so the child can see for themselves why it did not fit rather than just being
   told no. Red always means "this is wrong"; orange always means "look here".
-- **Levels 6+ hold the verdict** until the last blank is filled, which is how
-  real sudoku feels.
-- **Every completed level gets confetti** and a tune; mastering one gets a trophy
-  and a fanfare, then moves on automatically.
+- **Levels 6–10 hold the verdict** until the grid is full. **Levels 11+ check
+  each box as it fills**, so a 9×9 with fifty blanks gives a small result every
+  few moves instead of one long silence.
+- **Stuck? Tap the 💡.** It finds a square that can genuinely be worked out from
+  what is already on the board and lights up the numbers that prove it — the
+  same two techniques the levels are built on, easiest first. It never fills the
+  answer in. The reasoning runs only over given numbers and confirmed answers,
+  so a hint is never built on an unchecked guess, and it steps around squares
+  already holding one rather than quietly revealing they are wrong.
+- **The numbers are spoken aloud** as they go in, using the browser's own voice —
+  the one bit of reading practice the game can offer a pre-reader. Turn it off
+  in the menu.
+- **Every completed level gets confetti** and a tune; mastering one earns a
+  **sticker** — twenty of them, one per level, kept in the menu — plus a fanfare,
+  then moves on automatically.
+- **A mistake costs one star, not all five.** Five *consecutive* flawless solves
+  is a punishing ask on the bigger grids, and stalling there is the likeliest way
+  for the ladder to fail a real child.
 - The **level number is always in the header**, and the menu button opens a grid
   of all 20 levels so you can jump anywhere at any time. Levels already beaten
   stay gold in the menu even after their stars start over for a replay.
@@ -37,6 +51,11 @@ the number they just tapped.
   face) and **Chalk** (a classroom board, the child writing in yellow chalk).
   A theme is a complete set of custom properties, so it changes the roundness,
   the typeface and the weight of the rules as well as the colours.
+- **For grown-ups** in the menu shows rounds played, how many were clean and
+  where the mistakes are, so you can retune the ladder from what actually
+  happens rather than guesswork.
+- **Add it to your home screen** and it works with no signal — it is a proper
+  installable app with its own icon.
 - **Start over** at the bottom of the menu clears every star. It takes two taps,
   because a five-year-old is holding the device.
 - The level reached, the stars and the sound setting are kept in `localStorage`.
@@ -104,6 +123,10 @@ ramp gentler, change a `blanks` number or insert a row — nothing else needs to
 change — `blanks` is a target, and the generator takes away as many numbers as it
 can while the puzzle still yields to the level's technique.
 
+`technique` and `requireHidden` set the reasoning a level demands; `feedback`
+chooses when it answers back (`immediate`, `onBox`, `onComplete`); `sticker` is
+what mastering it earns.
+
 `showConflicts: true` turns on the orange "that number is already here" hint;
 add it to a later level if it is still wanted, or drop it from an early one once
 the child no longer needs the help. `requireHidden: true` insists a puzzle really
@@ -118,7 +141,9 @@ of all of them, which is kinder for a young child who is tiring.
 | `js/levels.js` | The level table and the mastery constants — the tuning knob |
 | `js/generator.js` | Grid generation, the human-technique solver, and blank carving |
 | `js/audio.js` | Oscillator sound effects, and keeping Safari's audio awake |
-| `js/game.js` | State, rendering, input, streaks, confetti, themes |
+| `js/game.js` | State, rendering, input, streaks, confetti, themes, hints, stats |
+| `sw.js` | Offline cache. **Bump `CACHE` on any deploy that ships new files** |
+| `manifest.webmanifest` | Makes it installable to a home screen |
 
 A number is never taken away unless the puzzle can still be reasoned out with the
 level's own technique, which also guarantees exactly one solution — a child who

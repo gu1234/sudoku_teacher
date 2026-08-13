@@ -15,6 +15,14 @@ const WRONG_PAUSE_WITH_HINT = 1600;
 const VERDICT_PAUSE = 1100;
 const VERDICT_PAUSE_WITH_HINT = 2400;
 
+// How long a hint stays on the board before it fades.
+const HINT_LINGER = 6000;
+
+// Said aloud as a number goes in, so a child who cannot read yet hears the
+// name of the numeral they just chose.
+const NUMBER_WORDS = ['', 'one', 'two', 'three', 'four', 'five',
+                      'six', 'seven', 'eight', 'nine'];
+
 
 const state = {
   levelId: 1,
@@ -29,6 +37,8 @@ const state = {
   selected: -1,
   activeDigit: 0,           // the number last tapped, highlighted across the board
   theme: 'sky',             // which look is on
+  speak: true,              // say each number out loud as it goes in
+  stats: {},                // levelId -> { attempts, perfect, mistakes }
   busy: false,              // true while a celebration is playing
   // Bumped on every new puzzle. The delayed callbacks below capture it and
   // bail if it has moved on, so a level picked from the menu mid-animation
@@ -48,6 +58,11 @@ const el = {
   muteBtn: document.getElementById('mute-btn'),
   resetBtn: document.getElementById('reset-btn'),
   themes: document.getElementById('themes'),
+  speakBtn: document.getElementById('speak-btn'),
+  statsBtn: document.getElementById('stats-btn'),
+  stats: document.getElementById('stats'),
+  statsBody: document.getElementById('stats-body'),
+  statsClose: document.getElementById('stats-close'),
   confetti: document.getElementById('confetti'),
   cheer: document.getElementById('cheer'),
   cheerFace: document.getElementById('cheer-face'),
@@ -68,6 +83,8 @@ function save() {
       mastered: state.mastered,
       muted: state.muted,
       theme: state.theme,
+      speak: state.speak,
+      stats: state.stats,
     }));
   } catch (e) { /* private browsing, nothing we can do */ }
 }
@@ -82,9 +99,29 @@ function load() {
   state.mastered = saved.mastered || {};
   state.muted = !!saved.muted;
   if (THEMES.indexOf(saved.theme) !== -1) state.theme = saved.theme;
+  if (typeof saved.speak === 'boolean') state.speak = saved.speak;
+  state.stats = saved.stats || {};
 }
 
 function streakOf(levelId) { return state.streaks[levelId] || 0; }
+
+/* ----------------------------------------------------------------- speech */
+
+/* The browser's own voice, so there is nothing to host and nothing to load.
+ * Naming the numeral as it goes in is the one bit of reading practice the game
+ * can offer a child who cannot read yet. */
+function say(word) {
+  if (!state.speak || state.muted || !word) return;
+  if (typeof speechSynthesis === 'undefined') return;
+  try {
+    speechSynthesis.cancel();            // never let them queue up and lag behind
+    const u = new SpeechSynthesisUtterance(word);
+    u.lang = 'en-US';
+    u.rate = 0.9;
+    u.pitch = 1.15;
+    speechSynthesis.speak(u);
+  } catch (e) { /* no voice available; the tones still play */ }
+}
 
 /* ------------------------------------------------------------------ looks */
 
@@ -291,6 +328,18 @@ function renderPad() {
     erase.setAttribute('aria-label', 'Clear this square');
     el.pad.appendChild(erase);
   }
+
+  // Somewhere to turn when stuck. Not on the warm-ups, where a single missing
+  // number leaves nothing to be stuck about.
+  if (spec.blanks > 2) {
+    const hint = document.createElement('button');
+    hint.type = 'button';
+    hint.className = 'key hint-key' + (spec.feedback === 'immediate' ? ' wide' : '');
+    hint.id = 'hint-btn';
+    hint.textContent = '💡';
+    hint.setAttribute('aria-label', 'Show me a square I can work out');
+    el.pad.appendChild(hint);
+  }
 }
 
 /* ------------------------------------------------------------------ input */
@@ -353,6 +402,7 @@ function place(digit) {
       state.entries[i] = digit;
       state.locked[i] = true;
       Sound.correct();
+      say(NUMBER_WORDS[digit]);
       state.selected = -1;                 // they pick the next square themselves
       repaint();
       flash(i, 'pop');
@@ -392,13 +442,14 @@ function place(digit) {
   } else {
     state.entries[i] = digit;
     Sound.place();
+    say(NUMBER_WORDS[digit]);
     state.selected = -1;                   // they pick the next square themselves
     repaint();
     flash(i, 'pop');
   }
 
   save();
-  checkComplete();
+  checkComplete(i);
 }
 
 /* Wipes the red "wrong" and the highlighted clashes. These are added directly
@@ -406,7 +457,7 @@ function place(digit) {
  * and they have to be taken off deliberately. */
 function clearMarks() {
   for (let i = 0; i < cellEls.length; i++) {
-    cellEls[i].classList.remove('bad', 'conflict');
+    cellEls[i].classList.remove('bad', 'conflict', 'hint-target', 'hint-proof');
   }
 }
 
@@ -418,9 +469,64 @@ function flash(i, className) {
   cell.classList.add(className);
 }
 
+/* ------------------------------------------------------------------- help */
+
+/* Points at one square that can be worked out right now, and lights up the
+ * numbers that prove it. Never fills anything in: being shown where to look is
+ * help, being given the answer is not.
+ *
+ * The reasoning runs over the given numbers plus answers already confirmed --
+ * never over a guess that has not been checked, or the advice would be built
+ * on a wrong number. Squares already holding an unchecked guess are passed
+ * over too, so a hint cannot quietly reveal that one of them is wrong. */
+function showHint() {
+  if (state.busy || !state.entries) return;
+  const spec = getLevel(state.levelId);
+
+  const trusted = state.entries.map(function (v, i) { return state.locked[i] ? v : 0; });
+  const guessed = state.entries.map(function (v, i) { return v !== 0 && !state.locked[i]; });
+
+  let step = nextStep(trusted, spec, guessed);
+  // If every findable square already holds a guess, help anyway rather than
+  // leaving them stuck with nothing.
+  if (!step) step = nextStep(trusted, spec);
+  if (!step) return;
+
+  clearMarks();
+  state.activeDigit = 0;
+  state.selected = state.locked[step.index] ? -1 : step.index;
+  repaint();
+
+  cellEls[step.index].classList.add('hint-target');
+  step.proof.forEach(function (i) {
+    if (i !== step.index) cellEls[i].classList.add('hint-proof');
+  });
+
+  Sound.select();
+
+  const token = state.token;
+  setTimeout(function () {
+    if (state.token !== token || state.busy) return;
+    clearMarks();
+  }, HINT_LINGER);
+}
+
+/* The box a square belongs to. */
+function boxCellsFor(spec, i) {
+  if (spec.kind !== 'grid') return null;
+  const n = spec.size;
+  const r0 = Math.floor(Math.floor(i / n) / spec.boxH) * spec.boxH;
+  const c0 = Math.floor((i % n) / spec.boxW) * spec.boxW;
+  const out = [];
+  for (let r = r0; r < r0 + spec.boxH; r++) {
+    for (let c = c0; c < c0 + spec.boxW; c++) out.push(r * n + c);
+  }
+  return out;
+}
+
 /* ------------------------------------------------------- finishing a level */
 
-function checkComplete() {
+function checkComplete(justPlaced) {
   const spec = getLevel(state.levelId);
 
   if (spec.feedback === 'immediate') {
@@ -432,16 +538,44 @@ function checkComplete() {
     return;
   }
 
-  if (state.entries.indexOf(0) !== -1) return;   // still blanks
-
-  // Deferred check: mark the wrong ones, keep the right ones, let them retry.
-  const wrong = [];
-  for (let i = 0; i < state.entries.length; i++) {
-    if (state.entries[i] !== state.solution[i]) wrong.push(i);
-    else state.locked[i] = true;
+  // Box by box: the moment the box just added to is full, it gets checked.
+  // On a 9x9 with fifty blanks this turns one verdict at the very end into a
+  // small result every few moves, without giving any reasoning away.
+  if (spec.feedback === 'onBox' && typeof justPlaced === 'number') {
+    const box = boxCellsFor(spec, justPlaced);
+    const full = box && box.every(function (i) { return state.entries[i] !== 0; });
+    if (full) judge(box);
+    return;
   }
 
-  if (wrong.length === 0) { win(); return; }
+  if (state.entries.indexOf(0) !== -1) return;   // still blanks
+
+  const all = [];
+  for (let i = 0; i < state.entries.length; i++) all.push(i);
+  judge(all);
+}
+
+/* Rules on a filled set of squares: the whole grid, or one box. Right answers
+ * lock, wrong ones are marked, shown, and taken back for another go. */
+function judge(indices) {
+  const spec = getLevel(state.levelId);
+  const wrong = [];
+
+  indices.forEach(function (i) {
+    if (state.entries[i] !== state.solution[i]) wrong.push(i);
+    else state.locked[i] = true;
+  });
+
+  if (wrong.length === 0) {
+    if (state.locked.indexOf(false) === -1) { win(); return; }
+    // A box came good but the puzzle is not finished: a small win, and the
+    // squares are locked from here so the ground under them is firm.
+    Sound.boxDone();
+    repaint();
+    indices.forEach(function (i) { flash(i, 'pop'); });
+    save();
+    return;
+  }
 
   state.mistakes += wrong.length;
   state.busy = true;
@@ -452,9 +586,9 @@ function checkComplete() {
     flash(i, 'shake');
   });
 
-  // Same lesson as on the immediate levels, just held back until the end:
-  // show which squares already hold each number that did not fit. Squares that
-  // are themselves wrong stay red -- they are not evidence of anything.
+  // Same lesson as on the immediate levels, just held back: show which squares
+  // already hold each number that did not fit. Squares that are themselves
+  // wrong stay red -- they are not evidence of anything.
   let pause = VERDICT_PAUSE;
   if (spec.showConflicts) {
     const lit = {};
@@ -481,11 +615,18 @@ function checkComplete() {
 }
 
 function win() {
+  const spec = getLevel(state.levelId);
   const perfect = state.mistakes === 0;
   const before = streakOf(state.levelId);
   const after = perfect
     ? before + 1
     : (RESET_ON_MISTAKE ? 0 : Math.max(0, before - 1));
+
+  const seen = state.stats[state.levelId] || { attempts: 0, perfect: 0, mistakes: 0 };
+  seen.attempts++;
+  if (perfect) seen.perfect++;
+  seen.mistakes += state.mistakes;
+  state.stats[state.levelId] = seen;
 
   state.streaks[state.levelId] = after;
   state.selected = -1;
@@ -499,7 +640,7 @@ function win() {
   if (mastered) {
     state.mastered[state.levelId] = true;   // kept for good, so the menu
     Sound.fanfare();                        // always shows what they have done
-    celebrate(140, '🏆');
+    celebrate(140, spec.sticker || '🏆');
   } else {
     Sound.win();
     celebrate(70, perfect ? '🎉' : '👍');
@@ -623,12 +764,18 @@ function renderMenu() {
       : (spec.kind === 'row' ? '1×4' : spec.kind === 'col' ? '4×1' : '2×2');
 
     const dots = document.createElement('span');
-    dots.className = 'tile-stars';
-    const done = isMastered ? MASTERY_TARGET : streakOf(spec.id);
-    for (let i = 0; i < MASTERY_TARGET; i++) {
-      const s = document.createElement('i');
-      if (i < done) s.className = 'on';
-      dots.appendChild(s);
+    if (isMastered) {
+      // A sticker earned and kept, rather than five dots that are always full.
+      dots.className = 'tile-sticker';
+      dots.textContent = spec.sticker || '⭐';
+    } else {
+      dots.className = 'tile-stars';
+      const done = streakOf(spec.id);
+      for (let i = 0; i < MASTERY_TARGET; i++) {
+        const s = document.createElement('i');
+        if (i < done) s.className = 'on';
+        dots.appendChild(s);
+      }
     }
 
     tile.appendChild(num);
@@ -676,12 +823,72 @@ function armReset() {
 function resetProgress() {
   state.streaks = {};
   state.mastered = {};
+  state.stats = {};
   state.levelId = 1;
   state.puzzle = null;              // so the new attempt cannot repeat the old one
   goToLevel(1);
   save();                           // sound stays as it was: a setting, not progress
   renderMenu();
   disarmReset();
+}
+
+/* What the grown-up wants to know: where the rounds are going. Levels never
+ * played are left out -- an empty row says nothing. */
+function renderStats() {
+  const rows = LEVELS.filter(function (spec) { return state.stats[spec.id]; });
+  el.statsBody.innerHTML = '';
+
+  if (!rows.length) {
+    const empty = document.createElement('p');
+    empty.className = 'menu-note';
+    empty.textContent = 'Nothing played yet.';
+    el.statsBody.appendChild(empty);
+    return;
+  }
+
+  const table = document.createElement('table');
+  table.className = 'stats-table';
+  table.innerHTML =
+    '<thead><tr><th>Level</th><th>Rounds</th><th>Clean</th><th>Mistakes</th></tr></thead>';
+  const body = document.createElement('tbody');
+
+  let totalRounds = 0;
+  let totalClean = 0;
+  let totalMistakes = 0;
+
+  rows.forEach(function (spec) {
+    const st = state.stats[spec.id];
+    totalRounds += st.attempts;
+    totalClean += st.perfect;
+    totalMistakes += st.mistakes;
+
+    const tr = document.createElement('tr');
+    if (state.mastered[spec.id]) tr.className = 'done';
+    tr.innerHTML =
+      '<td>' + spec.id + (state.mastered[spec.id] ? ' ' + (spec.sticker || '') : '') + '</td>' +
+      '<td>' + st.attempts + '</td>' +
+      '<td>' + Math.round(100 * st.perfect / st.attempts) + '%</td>' +
+      '<td>' + st.mistakes + '</td>';
+    body.appendChild(tr);
+  });
+
+  const foot = document.createElement('tr');
+  foot.className = 'total';
+  foot.innerHTML = '<td>All</td><td>' + totalRounds + '</td><td>' +
+    Math.round(100 * totalClean / totalRounds) + '%</td><td>' + totalMistakes + '</td>';
+  body.appendChild(foot);
+
+  table.appendChild(body);
+  el.statsBody.appendChild(table);
+}
+
+function setSpeak(on) {
+  state.speak = !!on;
+  el.speakBtn.setAttribute('aria-pressed', String(state.speak));
+  if (!state.speak && typeof speechSynthesis !== 'undefined') {
+    try { speechSynthesis.cancel(); } catch (e) { /* nothing to stop */ }
+  }
+  save();
 }
 
 function setMuted(muted) {
@@ -732,7 +939,9 @@ document.addEventListener('click', function (e) {
 
 el.pad.addEventListener('click', function (e) {
   const key = e.target.closest('.key');
-  if (key) place(Number(key.dataset.digit));
+  if (!key) return;
+  if (key.classList.contains('hint-key')) { showHint(); return; }
+  place(Number(key.dataset.digit));
 });
 
 el.menuBtn.addEventListener('click', openMenu);
@@ -743,6 +952,27 @@ el.themes.addEventListener('click', function (e) {
   if (!pick) return;
   setTheme(pick.dataset.themeName);
   Sound.select();
+});
+
+el.speakBtn.addEventListener('click', function () {
+  setSpeak(!state.speak);
+  Sound.select();
+  if (state.speak) say('three');           // a sample, so the change is audible
+});
+
+el.statsBtn.addEventListener('click', function () {
+  renderStats();
+  el.stats.hidden = false;
+  el.statsClose.focus();
+});
+
+el.statsClose.addEventListener('click', function () {
+  el.stats.hidden = true;
+  el.statsBtn.focus();
+});
+
+el.stats.addEventListener('click', function (e) {
+  if (e.target === el.stats) el.stats.hidden = true;
 });
 
 el.resetBtn.addEventListener('click', function () {
@@ -774,6 +1004,11 @@ document.addEventListener('keydown', function (e) {
   // This handler runs before the window-level unlock listener below (events
   // reach document first), so the very first keypress would otherwise be mute.
   Sound.unlock();
+
+  if (!el.stats.hidden) {
+    if (e.key === 'Escape') el.stats.hidden = true;
+    return;
+  }
 
   if (!el.menu.hidden) {
     if (e.key === 'Escape') closeMenu();
@@ -816,8 +1051,19 @@ window.addEventListener('resize', function () {
 
 /* ------------------------------------------------------------------- start */
 
+// Added to the home screen it becomes an app that needs no signal. Registered
+// after everything else is running, so a failure here can never stop the game.
+if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('./sw.js').catch(function () {
+      /* offline support is a bonus, not a requirement */
+    });
+  });
+}
+
 load();
 setTheme(state.theme);
+setSpeak(state.speak);
 setMuted(state.muted);
 newAttempt();          // always a clean puzzle, on the level they got to
 render();

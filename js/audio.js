@@ -106,6 +106,9 @@ const Sound = (function () {
       note(225, 0.11, 0.22, 0.11, 'sine');
     },
 
+    // A box came out right, on the levels that check box by box.
+    boxDone: function () { melody([E5, C6], 0.07, 0.22, 0.13, 'triangle'); },
+
     // Level finished.
     win: function () { melody([C5, E5, G5, C6, E6], 0.09, 0.42, 0.15, 'triangle'); },
 

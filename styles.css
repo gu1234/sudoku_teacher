@@ -573,7 +573,9 @@ button {
 }
 
 .key.erase {
-  grid-column: 1 / -1;         /* a wide bar under the digits, hard to mis-hit */
+  /* Shares the bottom row with the hint: every column but the last. A row each
+     would push the pad a whole key taller and squeeze the grid above it. */
+  grid-column: 1 / -2;
   height: calc(var(--key) * .72);
   color: var(--ink-soft);
   border-color: var(--line);
@@ -783,6 +785,111 @@ button {
   font-size: 19px;
 }
 .close-btn:active { transform: scale(.97); }
+
+/* The square the hint is pointing at, and the numbers that prove it. Orange
+   again, because orange has meant "look over here" since the first level. */
+.cell.hint-target {
+  background: color-mix(in srgb, var(--accent) 26%, var(--surface));
+  box-shadow: inset 0 0 0 5px var(--accent);
+  z-index: 5;
+  animation: point-out .6s ease-in-out 4;
+}
+.cell.hint-proof {
+  background: color-mix(in srgb, var(--hint) 20%, var(--surface));
+  z-index: 1;
+}
+
+.key.hint-key {
+  grid-column: -2 / -1;        /* the last column of the bottom row */
+  height: calc(var(--key) * .72);
+  font-size: calc(var(--key) * .4);
+  border-color: color-mix(in srgb, var(--hint) 55%, transparent);
+}
+/* On levels with no eraser there is nothing to share the row with. */
+.key.hint-key.wide { grid-column: 1 / -1; }
+
+/* Two small controls side by side under the level list. */
+.menu-row {
+  flex: none;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s2);
+}
+
+.toggle-btn {
+  padding: 11px var(--s2);
+  border-radius: var(--radius);
+  background: var(--given-bg);
+  border: 3px solid transparent;
+  font-size: 13px;
+  color: var(--ink-soft);
+  transition: border-color .12s ease, color .12s ease, transform .1s ease;
+}
+.toggle-btn:active { transform: scale(.96); }
+.toggle-btn[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--ink);
+}
+
+.menu-note {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.45;
+  color: var(--ink-soft);
+  text-align: center;
+}
+.menu-note code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+}
+
+.stats-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.stats-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+.stats-table th {
+  position: sticky;
+  top: 0;
+  padding: 8px 6px;
+  background: var(--surface);
+  border-bottom: 2px solid var(--line);
+  font-size: 12px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  text-align: right;
+}
+.stats-table th:first-child { text-align: left; }
+.stats-table td {
+  padding: 8px 6px;
+  border-bottom: 1px solid var(--line);
+  text-align: right;
+}
+.stats-table td:first-child { text-align: left; }
+.stats-table tr.done td:first-child { color: var(--gold); }
+.stats-table tr.total td {
+  border-bottom: none;
+  border-top: 2px solid var(--line);
+  color: var(--ink-soft);
+}
+
+/* A sticker replaces the five dots once a level is beaten: the dots would all
+   be full anyway, and a thing collected is worth more than a bar filled. */
+.tile-sticker {
+  font-size: 20px;
+  line-height: 1;
+  filter: drop-shadow(0 2px 3px rgba(0, 0, 0, .22));
+}
 
 /* Deliberately quiet and last in the panel -- it is a grown-up's button. */
 .reset-btn {

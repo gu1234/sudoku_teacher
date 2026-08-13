@@ -270,6 +270,65 @@ function solvableBy(cells, spec, technique) {
   return work.indexOf(0) === -1;
 }
 
+/* The next square that can be worked out from what is already on the board,
+ * and the reason it can be. Same two techniques the levels are built on, tried
+ * easiest first, so the help offered is never beyond what the child has met.
+ *
+ * Returns { index, digit, kind, proof } where proof is the squares to light up:
+ * for elimination, the filled squares that rule out every other digit; for
+ * cross-hatching, the group the digit has only one home left in. Deliberately
+ * does not return the answer for the caller to fill in -- the child still puts
+ * the number there themselves.
+ *
+ * `cells` must be a board the caller trusts -- the given numbers plus answers
+ * already confirmed. Reasoning over a board holding an unchecked guess would
+ * produce advice built on a wrong number. `skip` marks squares not to offer,
+ * which is how the caller keeps a hint from quietly revealing that a guess
+ * already sitting on the board is wrong. */
+function nextStep(cells, spec, skip) {
+  const units = unitsOf(spec);
+  const blocked = function (i) { return skip ? !!skip[i] : false; };
+
+  // Elimination: a square with only one digit left that fits.
+  for (let i = 0; i < cells.length; i++) {
+    if (cells[i] !== 0 || blocked(i)) continue;
+    let only = 0;
+    let count = 0;
+    for (let d = 1; d <= spec.size; d++) {
+      if (!isLegal(cells, spec, i, d)) continue;
+      count++; only = d;
+      if (count > 1) break;
+    }
+    if (count === 1) {
+      // What rules the others out: the filled squares this one can see.
+      const proof = peersOf(spec, i).filter(function (p) { return cells[p] !== 0; });
+      return { index: i, digit: only, kind: 'naked', proof: proof };
+    }
+  }
+
+  // Cross-hatching: a digit with only one square left in some group.
+  for (let u = 0; u < units.length; u++) {
+    const unit = units[u];
+    for (let d = 1; d <= spec.size; d++) {
+      let spot = -1;
+      let count = 0;
+      for (let k = 0; k < unit.length; k++) {
+        const i = unit[k];
+        if (cells[i] === d) { count = -1; break; }
+        if (cells[i] !== 0) continue;
+        if (!isLegal(cells, spec, i, d)) continue;
+        count++; spot = i;
+        if (count > 1) break;
+      }
+      if (count === 1 && !blocked(spot)) {
+        return { index: spot, digit: d, kind: 'hidden', proof: unit.slice() };
+      }
+    }
+  }
+
+  return null;
+}
+
 /* Take numbers away for as long as the puzzle can still be reasoned out with
  * the techniques this level allows. Returns however many it managed. */
 function carve(full, spec) {

@@ -1,0 +1,16 @@
+{
+  "name": "Sudoku Steps",
+  "short_name": "Sudoku",
+  "description": "A gentle sudoku game that teaches a five-year-old to play, one step at a time.",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f2f5fb",
+  "theme_color": "#5b7cfa",
+  "icons": [
+    { "src": "./icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
